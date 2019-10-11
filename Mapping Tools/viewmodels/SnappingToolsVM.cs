@@ -21,6 +21,8 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Mapping_Tools.Classes.SnappingTools.DataStructure.RelevantObjectGenerators;
+using Process.NET.Windows.Mouse;
+using Process.NET.Windows.Keyboard;
 
 namespace Mapping_Tools.Viewmodels {
     public class SnappingToolsVm
@@ -73,6 +75,8 @@ namespace Mapping_Tools.Viewmodels {
         private SnappingToolsOverlay _overlay;
         private ProcessSharp _processSharp;
         private IWindow _osuWindow;
+        private MouseHook _mouseHook;
+        private KeyboardHook _keyboardHook;
 
         private State _state;
 
@@ -116,6 +120,17 @@ namespace Mapping_Tools.Viewmodels {
             _updateTimer.Tick += UpdateTimerTick;
             _autoSnapTimer = new DispatcherTimer(DispatcherPriority.Send) { Interval = TimeSpan.FromMilliseconds(16) };
             _autoSnapTimer.Tick += AutoSnapTimerTick;
+
+            // Set up MouseHook
+            _mouseHook = new MouseHook(string.Empty);
+            _mouseHook.LeftButtonDown += (s, e) => UpdateRelevantObjects();
+            _mouseHook.LeftButtonUp += (s, e) => UpdateRelevantObjects();
+            _mouseHook.RightButtonDown += (s, e) => UpdateRelevantObjects();
+
+            // Set up KeyboardHook
+            _keyboardHook = new KeyboardHook(string.Empty) {
+                KeyDownEvent = new KeyboardHook.KeyDownEventDelegate((e) => UpdateRelevantObjects())
+            };
 
             // Listen for changes in the osu! user config
             _configWatcher = new FileSystemWatcher();
@@ -258,6 +273,9 @@ namespace Mapping_Tools.Viewmodels {
 
                     _overlay.OverlayWindow.Draw += OnDraw;
 
+                    _mouseHook.Enable();
+                    _keyboardHook.Enable();
+
                     _updateTimer.Interval = TimeSpan.FromMilliseconds(100);
                     _state = State.Active;
                     break;
@@ -267,12 +285,16 @@ namespace Mapping_Tools.Viewmodels {
                     if (reader.ProcessNeedsReload()) {
                         ClearRelevantObjects();
                         _state = State.LookingForProcess;
+                        _mouseHook.Disable();
+                        _keyboardHook.Disable();
                         _overlay.Dispose();
                         return;
                     }
                     if (reader.EditorNeedsReload()) {
                         ClearRelevantObjects();
                         _state = State.LookingForEditor;
+                        _mouseHook.Disable();
+                        _keyboardHook.Disable();
                         _overlay.Dispose();
                         return;
                     }
